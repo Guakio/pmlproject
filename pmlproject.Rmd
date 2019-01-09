@@ -1,0 +1,133 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Gustavo Ogasawara"
+date: "January 9, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+Human Activity Recognition (HAR) data were used to develop a prediction model that predicts the class of a movement based on a series of measured parameters.
+
+After cleaning process, the data was divided in train and test sets, and then random forest method was applied to construct a prediction model for 5 classes (A, B, C, D, E).
+
+The model predicts the test set with 99% of accuracy and OOB estimated of error rate was 0.84%.
+
+Thanks for Groupware to provide the data: http://groupware.les.inf.puc-rio.br/har#sbia_paper_section
+
+
+## Downloading Data
+
+```{r download}
+if (!file.exists("pml-training.csv")){
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile =     "pml-training.csv", method = "wget")}
+if (!file.exists("pml-testing.csv")){
+        download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile =     "pml-testing.csv", method = "wget")
+}
+
+datatrain <- read.csv("pml-training.csv", na.strings = c("NA","#DIV/0!",""))
+testquiz <- read.csv("pml-testing.csv", na.strings = c("NA","#DIV/0!",""))
+```
+
+## Cleaning Data
+
+To remove NA columns and non-predictors as index, subjects.. etc.
+
+```{r cleaning}
+#removing NA columns
+datatrain <- datatrain[,colSums(is.na(datatrain)) == 0]
+testquiz <- testquiz[,colSums(is.na(testquiz)) == 0]
+
+#removing non-predictors (index, subjects..)
+datatrain<-datatrain[,-c(1:7)]
+testquiz<-testquiz[,-c(1:7)]
+
+dim(datatrain)
+dim(testquiz)
+
+```
+
+## Partition Training Data
+
+Creating train and test sets.
+
+```{r partitioning}
+
+library(caret)
+
+set.seed(666)
+
+inTrain <- createDataPartition(datatrain$classe, p = 0.6, list = FALSE)
+
+train   <- datatrain[inTrain,]
+test    <- datatrain[-inTrain,]
+
+
+```
+
+## Prediction Model
+
+Using random forest method with Parallel to reduce computation time as seeing in Class Forum.
+
+```{r modeling}
+
+library(randomForest)
+library(e1071)
+library(parallel)
+library(doParallel)
+
+modname <- "mymodfit.RData"
+
+if (!file.exists(modname)) {
+
+    cores <- makeCluster(detectCores() - 1)
+    registerDoParallel(cores)
+    getDoParWorkers()     
+    
+    
+    modfit <- train(classe ~ ., data = train, method = "rf", metric = "Accuracy", trControl=trainControl(method = "cv", number = 4, p= 0.60, allowParallel = TRUE))
+
+    save(modfit, file = "mymodfit.RData")
+   
+    stopCluster(cores)
+    
+} else {
+    
+    load(file = modname, verbose = TRUE)
+}
+
+
+```
+
+## Accuracy and validation tests
+
+
+
+```{r}
+
+predtest <- predict(modfit, test)
+confusionMatrix(predtest, test$classe)
+
+```
+The model worked with high accuracy and low error.
+
+```{r}
+modfit$finalModel
+```
+## Checking Most Important Variables
+
+```{r}
+varImp(modfit)
+```
+
+## Predicts for Quiz
+```{r}
+predtestquiz <- predict(modfit, testquiz)
+predtestquiz
+```
+
+
